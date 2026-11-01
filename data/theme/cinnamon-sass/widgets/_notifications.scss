@@ -21,7 +21,7 @@ $notification_width: 34em;
 
   &-scrollview {}
 
-  StEntry {}
+  StEntry { @extend %entry; }
 }
 
 .notification {
@@ -45,4 +45,8 @@ $notification_width: 34em;
   }
 
   &-icon-button > StIcon {}
+
+  &-reply-box { spacing: $base_padding; }
+
+  &-entry { @extend %entry; }
 }

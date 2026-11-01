@@ -65,6 +65,10 @@ const NotificationDaemonIface =
                 <arg type="u"/> \
                 <arg type="s"/> \
             </signal> \
+            <signal name="NotificationReplied"> \
+                <arg type="u"/> \
+                <arg type="s"/> \
+            </signal> \
         </interface> \
     </node>';
 
@@ -496,6 +500,9 @@ NotificationDaemon.prototype = {
                 function(n, actionId) {
                     this._emitActionInvoked(ndata.id, actionId);
                 }));
+            notification.connect('reply', (n, text) => {
+                this._emitNotificationReplied(ndata.id, text);
+            });
         } else {
             notification.update(summary, body, { icon: iconActor,
                                                  bodyMarkup: true,
@@ -529,6 +536,12 @@ NotificationDaemon.prototype = {
 
         notification.clearButtons();
 
+        let inlineReplyHint = hints.maybeGet('inline-reply');
+        let replyActionId = typeof inlineReplyHint === 'string' ? inlineReplyHint : 'inline-reply';
+        let placeholderText = hints.maybeGet('x-kde-reply-placeholder-text') || null;
+        let submitText = hints.maybeGet('x-kde-reply-submit-button-text') || null;
+        let hasReplyAction = false;
+
         if (actions.length) {
             notification.setUseActionIcons(hints.maybeGet('action-icons') == true);
             for (let i = 0; i < actions.length - 1; i += 2) {
@@ -537,7 +550,10 @@ NotificationDaemon.prototype = {
                         function() {
                             this._emitActionInvoked(ndata.id, "default");
                         }));
-                else
+                else if (actions[i] === replyActionId) {
+                    notification.addReplyButton(actions[i], actions[i + 1], placeholderText, submitText);
+                    hasReplyAction = true;
+                } else
                     notification.addButton(actions[i], actions[i + 1]);
             }
         }
@@ -556,6 +572,12 @@ NotificationDaemon.prototype = {
         // 'transient' is a reserved keyword in JS, so we have to retrieve the value
         // of the 'transient' hint with hints['transient'] rather than hints.transient
         notification.setTransient(hints.maybeGet('transient') == true);
+
+        if (hasReplyAction || inlineReplyHint != null) {
+            notification.setInlineReply(true, replyActionId, !hasReplyAction, placeholderText, submitText);
+        } else {
+            notification.setInlineReply(false, null, false, null, null);
+        }
 
         let sourceIconActor = source.useNotificationIcon ? this._notificationIcon(source, appIcon, hints) : null;
         source.processNotification(notification, sourceIconActor);
@@ -582,6 +604,7 @@ NotificationDaemon.prototype = {
             'icon-static',
             'persistence',
             'sound',
+            'inline-reply',
         ];
     },
 
@@ -621,6 +644,11 @@ NotificationDaemon.prototype = {
     _emitActionInvoked: function(id, action) {
         this._dbusImpl.emit_signal('ActionInvoked',
                                    GLib.Variant.new('(us)', [id, action]));
+    },
+
+    _emitNotificationReplied: function(id, text) {
+        this._dbusImpl.emit_signal('NotificationReplied',
+                                   GLib.Variant.new('(us)', [id, text]));
     },
 
     _onTrayIconAdded: function(o, icon) {
